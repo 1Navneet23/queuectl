@@ -2,22 +2,32 @@ package org.navneet.queuectl;
 
 public class Main {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
-        // Create database/table
         Database.createTable();
 
         JobRepository repository = new JobRepository();
 
         // Seed jobs
-        repository.insert(new Job("echo Hello QueueCTL", 3));
+        repository.insert(new Job("echo Job 1", 3));
+        repository.insert(new Job("echo Job 2", 3));
+        repository.insert(new Job("echo Job 3", 3));
+        repository.insert(new Job("echo Job 4", 3));
+        repository.insert(new Job("echo Job 5", 3));
         repository.insert(new Job("dir", 3));
         repository.insert(new Job("asdfasdf", 3));
 
-        // Create worker
-        Worker worker = new Worker("worker-1", repository);
+        WorkerManager manager =
+                new WorkerManager(3, repository);
 
-        // Run worker on current thread
-        worker.run();
+        manager.start();
+
+        try {
+            Thread.sleep(30000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        manager.stop();
     }
 }
