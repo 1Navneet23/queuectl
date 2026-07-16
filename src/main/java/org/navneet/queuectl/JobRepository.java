@@ -45,10 +45,7 @@ public class JobRepository {
 
             statement.setString(1, id);
             try (ResultSet rs = statement.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to find job", e);
@@ -62,9 +59,7 @@ public class JobRepository {
              PreparedStatement statement = connection.prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
 
-            while (rs.next()) {
-                jobs.add(mapRow(rs));
-            }
+            while (rs.next()) jobs.add(mapRow(rs));
             return jobs;
         } catch (SQLException e) {
             throw new RuntimeException("Failed to fetch jobs", e);
@@ -79,9 +74,7 @@ public class JobRepository {
 
             statement.setString(1, state.name());
             try (ResultSet rs = statement.executeQuery()) {
-                while (rs.next()) {
-                    jobs.add(mapRow(rs));
-                }
+                while (rs.next()) jobs.add(mapRow(rs));
             }
             return jobs;
         } catch (SQLException e) {
@@ -92,14 +85,8 @@ public class JobRepository {
     public void update(Job job) {
         String sql = """
                 UPDATE jobs
-                SET command = ?,
-                    state = ?,
-                    attempts = ?,
-                    maxRetries = ?,
-                    createdAt = ?,
-                    updatedAt = ?,
-                    next_run_at = ?,
-                    claimed_by = ?
+                SET command = ?, state = ?, attempts = ?, maxRetries = ?,
+                    createdAt = ?, updatedAt = ?, next_run_at = ?, claimed_by = ?
                 WHERE id = ?
                 """;
         try (Connection connection = Database.getConnection();
@@ -118,6 +105,46 @@ public class JobRepository {
             statement.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to update job", e);
+        }
+    }
+
+    /**
+     * Atomically claims the next available pending job for the given worker,
+     * using UPDATE ... RETURNING so the claim and the read happen in one
+     * indivisible statement — no separate "find what I claimed" query needed.
+     */
+    public Optional<Job> claimNextJob(String workerId) {
+        String sql = """
+                UPDATE jobs
+                SET state = ?, claimed_by = ?, updatedAt = ?
+                WHERE id = (
+                    SELECT id FROM jobs
+                    WHERE state = ?
+                      AND (next_run_at IS NULL OR next_run_at <= ?)
+                    ORDER BY createdAt
+                    LIMIT 1
+                )
+                AND state = ?
+                RETURNING *
+                """;
+
+        String now = Instant.now().toString();
+
+        try (Connection connection = Database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, JobState.PROCESSING.name());
+            statement.setString(2, workerId);
+            statement.setString(3, now);
+            statement.setString(4, JobState.PENDING.name());
+            statement.setString(5, now);
+            statement.setString(6, JobState.PENDING.name());
+
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to claim job", e);
         }
     }
 
@@ -140,9 +167,7 @@ public class JobRepository {
         job.setUpdatedAt(Instant.parse(rs.getString("updatedAt")));
 
         String nextRun = rs.getString("next_run_at");
-        if (nextRun != null) {
-            job.setNextRunAt(Instant.parse(nextRun));
-        }
+        if (nextRun != null) job.setNextRunAt(Instant.parse(nextRun));
 
         job.setClaimedBy(rs.getString("claimed_by"));
         return job;
