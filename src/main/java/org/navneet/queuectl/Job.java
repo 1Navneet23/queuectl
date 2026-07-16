@@ -27,6 +27,8 @@ public class Job {
         this.maxRetries = maxRetries;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+        this.nextRunAt = null;
+        this.claimedBy = null;
     }
 
     public Job(String id, String command, JobState state, int attempts, int maxRetries,

@@ -2,15 +2,22 @@ package org.navneet.queuectl;
 
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
 
-        ExecutionResult result =
-                CommandExecutor.executeCommand("asdfasdf");
+        // Create database/table
+        Database.createTable();
 
-        System.out.println("Exit Code: " + result.getExitCode());
-        System.out.println("Success: " + result.isSuccess());
+        JobRepository repository = new JobRepository();
 
-        System.out.println("Output:");
-        System.out.println(result.getOutput());
+        // Seed jobs
+        repository.insert(new Job("echo Hello QueueCTL", 3));
+        repository.insert(new Job("dir", 3));
+        repository.insert(new Job("asdfasdf", 3));
+
+        // Create worker
+        Worker worker = new Worker("worker-1", repository);
+
+        // Run worker on current thread
+        worker.run();
     }
 }
