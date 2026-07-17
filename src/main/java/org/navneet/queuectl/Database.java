@@ -15,7 +15,7 @@ public class Database {
 
     public static void createTable() {
 
-        String sql = """
+        String jobsTable = """
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
                     command TEXT NOT NULL,
@@ -29,11 +29,22 @@ public class Database {
                 );
                 """;
 
+        String configTable = """
+                CREATE TABLE IF NOT EXISTS config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                );
+                """;
+
         try (
                 Connection connection = getConnection();
                 Statement statement = connection.createStatement()
         ) {
-            statement.execute(sql);
+            // Create jobs table
+            statement.execute(jobsTable);
+
+            // Create config table
+            statement.execute(configTable);
 
         } catch (SQLException e) {
             System.err.println("Database error: " + e.getMessage());

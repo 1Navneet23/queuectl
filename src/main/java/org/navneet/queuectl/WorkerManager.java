@@ -13,21 +13,19 @@ public class WorkerManager {
 
     public WorkerManager(int workerCount, JobRepository repository) {
 
-        this.executor = Executors.newFixedThreadPool(workerCount);
-        this.workers = new ArrayList<>();
+        executor = Executors.newFixedThreadPool(workerCount);
+        workers = new ArrayList<>();
 
         for (int i = 1; i <= workerCount; i++) {
-
-            Worker worker =
-                    new Worker("worker-" + i, repository);
-
-            workers.add(worker);
+            workers.add(new Worker("worker-" + i, repository));
         }
     }
 
     public void start() {
 
-        System.out.println("Starting workers...");
+        System.out.println("==================================");
+        System.out.println("Starting Workers...");
+        System.out.println("==================================");
 
         for (Worker worker : workers) {
             executor.submit(worker);
@@ -36,21 +34,28 @@ public class WorkerManager {
 
     public void stop() {
 
-        System.out.println("Stopping workers...");
+        System.out.println("\n==================================");
+        System.out.println("Gracefully stopping workers...");
+        System.out.println("==================================");
 
         for (Worker worker : workers) {
             worker.stop();
         }
 
+
         executor.shutdown();
 
         try {
 
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
 
-                System.out.println("Force shutting down workers...");
+                System.out.println("Workers did not finish in time.");
 
                 executor.shutdownNow();
+
+                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    System.out.println("Forced shutdown complete.");
+                }
             }
 
         } catch (InterruptedException e) {
@@ -60,6 +65,8 @@ public class WorkerManager {
             Thread.currentThread().interrupt();
         }
 
-        System.out.println("All workers stopped.");
+        System.out.println("==================================");
+        System.out.println("Worker Manager Stopped");
+        System.out.println("==================================");
     }
 }

@@ -9,9 +9,11 @@ public class Worker implements Runnable {
     // Poll database every second if no jobs are available
     private static final long POLL_INTERVAL_MS = 1000;
 
-    // Exponential backoff base
-    private static final int BACKOFF_BASE = 2;
+    private final ConfigRepository configRepo = new ConfigRepository();
 
+    private final int backoffBase = Integer.parseInt(
+            configRepo.get("backoff-base", "2")
+    );
     private final String workerId;
     private final JobRepository repository;
 
@@ -73,8 +75,7 @@ public class Worker implements Runnable {
                         job.setState(JobState.PENDING);
 
                         long delay =
-                                (long) Math.pow(BACKOFF_BASE, job.getAttempts());
-
+                                (long) Math.pow(backoffBase, job.getAttempts());
                         Instant nextRun =
                                 Instant.now().plusSeconds(delay);
 
