@@ -41,3 +41,11 @@ build/
 target/
 .idea/
 *.iml
+
+logs/
+*.log
+queuectl.db
+*.db
+*.db-wal
+*.db-shm
+worker.flag
