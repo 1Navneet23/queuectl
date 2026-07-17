@@ -1,17 +1,27 @@
 # QueueCTL
 
 A Java-based command-line background job queue system with persistent
-SQLite storage, concurrent workers, configurable retries with
+SQLite storage, concurrent worker execution, configurable retries with
 exponential backoff, crash recovery, and a Dead Letter Queue (DLQ).
 
-> This project was developed as part of the Backend Developer Internship
-> Assignment. It implements all required features from the assignment
-> and several bonus features including job timeout support, execution
-> logging, metrics, and crash recovery.
+> This project was developed as part of the **Backend Developer
+> Internship Assignment**. It implements all required features from the
+> assignment along with several bonus features such as job timeout
+> handling, execution logging, metrics, and automatic recovery of stale
+> jobs.
 
-## Features
+------------------------------------------------------------------------
 
-### Core Features
+## Demo Video
+
+> **Demo:** *Add your Google Drive / YouTube demo link here before
+> submission.*
+
+------------------------------------------------------------------------
+
+# Features
+
+## Core Features
 
 -   Persistent job storage using SQLite
 -   Concurrent worker execution
@@ -22,42 +32,49 @@ exponential backoff, crash recovery, and a Dead Letter Queue (DLQ).
 -   Runtime configuration management
 -   Clean CLI interface using Picocli
 
-### Bonus Features
+## Bonus Features
 
 -   Job timeout configuration
--   Automatic recovery of stale PROCESSING jobs
+-   Automatic recovery of stale `PROCESSING` jobs
 -   Job execution logging
 -   Queue metrics and execution statistics
 
 ------------------------------------------------------------------------
 
-## Tech Stack
+# Tech Stack
 
 -   Java 22
 -   Maven
 -   Picocli
--   SQLite (sqlite-jdbc)
+-   SQLite (`sqlite-jdbc`)
 -   Jackson
 
 ------------------------------------------------------------------------
 
-## Setup
+# Setup
 
-### Prerequisites
+## Prerequisites
 
 -   JDK 22+
 -   Maven 3.8+
 
-### Build
+## Clone
+
+``` bash
+git clone https://github.com/<your-username>/queuectl.git
+cd queuectl
+```
+
+## Build
 
 ``` bash
 mvn clean package
 ```
 
-Run with:
+## Run
 
 ``` bash
-java -jar target/queuectl.jar
+java -jar target/queuectl-1.0-SNAPSHOT.jar
 ```
 
 or
@@ -68,15 +85,15 @@ mvn exec:java -Dexec.mainClass="org.navneet.queuectl.Main"
 
 The application automatically creates:
 
--   `queuectl.db`
--   `logs/`
--   `worker.flag`
+    queuectl.db
+    logs/
+    worker.flag
 
 ------------------------------------------------------------------------
 
-## Usage
+# Usage
 
-### Enqueue
+## Enqueue
 
 ``` bash
 queuectl enqueue '{"command":"echo Hello World"}'
@@ -88,48 +105,69 @@ or
 queuectl enqueue '{"id":"job1","command":"echo Hello World"}'
 ```
 
-### Start Workers
+## Start Workers
 
 ``` bash
 queuectl worker start --count 3
 ```
 
-Stop workers from another terminal:
+Stop workers gracefully:
 
 ``` bash
 queuectl worker stop
 ```
 
-### List Jobs
+## List Jobs
 
 ``` bash
 queuectl list
 queuectl list --state pending
 queuectl list --state processing
 queuectl list --state completed
+queuectl list --state failed
 queuectl list --state dead
 ```
 
-### Queue Status
+## Queue Status
 
 ``` bash
 queuectl status
 ```
 
-### Metrics
+Displays:
+
+-   Total Jobs
+-   Pending Jobs
+-   Processing Jobs
+-   Completed Jobs
+-   Failed Jobs
+-   Dead Jobs
+-   Active Workers
+
+## Metrics
 
 ``` bash
 queuectl metrics
 ```
 
-### Dead Letter Queue
+Displays:
+
+-   Total Jobs
+-   Completed Jobs
+-   Dead Jobs
+-   Success Rate
+-   Average Attempts
+-   Average Execution Time
+-   Timeout Statistics
+
+## Dead Letter Queue
 
 ``` bash
 queuectl dlq list
 queuectl dlq retry <job-id>
 ```
 
-### Configuration
+## Configuration
 
 ``` bash
 queuectl config get max-retries
@@ -143,75 +181,94 @@ queuectl config set job-timeout 30
 
 ------------------------------------------------------------------------
 
-## Architecture
+# Architecture
 
-    QueueCTL CLI
-          │
-          ▼
-    Command Layer
-          │
-          ▼
-    Worker Manager
-          │
-          ▼
-    Multiple Workers
-          │
-          ▼
-    Command Executor
-          │
-          ▼
-    SQLite Database
+                     QueueCTL CLI
+                           │
+                           ▼
+                   Command Layer
+                           │
+                           ▼
+                   Worker Manager
+                           │
+                  Multiple Workers
+                           │
+                           ▼
+                 Command Executor
+                           │
+                           ▼
+                   SQLite Database
 
-### Job Lifecycle
+## Job Lifecycle
 
     PENDING
        │
        ▼
     PROCESSING
        │
-     ┌─┴────────────┐
-     ▼             ▼
-    COMPLETED    FAILED
-                    │
-         attempts < maxRetries
-                    │
-                    ▼
+     ┌─┴─────────────┐
+     ▼               ▼
+    COMPLETED     FAILED
+                     │
+          attempts < maxRetries
+                     │
+                     ▼
           Exponential Backoff
-                    │
-                    ▼
-                PENDING
-                    │
-         attempts >= maxRetries
-                    │
-                    ▼
-                   DEAD
+                     │
+                     ▼
+                 PENDING
+                     │
+          attempts >= maxRetries
+                     │
+                     ▼
+                    DEAD
 
-### Persistence
+## Persistence
 
-Jobs and configuration are stored in SQLite. Data survives application
-restarts.
+Jobs and configuration are stored in SQLite.
 
-### Worker Management
+    queuectl.db
 
--   Multiple workers execute jobs concurrently.
+SQLite WAL mode and busy timeout are enabled to support concurrent
+worker execution safely.
+
+## Worker Management
+
+-   Multiple workers process jobs concurrently.
 -   Atomic job claiming prevents duplicate execution.
--   Workers shut down gracefully after finishing the current job.
--   Stale PROCESSING jobs are automatically recovered when workers start
-    again.
+-   Workers finish the current job before shutting down.
+-   Stale `PROCESSING` jobs are automatically recovered on startup.
 
-### Retry Strategy
+## Retry Strategy
 
     delay = backoffBase ^ attempts
 
-### Logging
+Example (`backoff-base = 2`):
 
-Every execution creates a log file inside:
+    Attempt       Delay
+  --------- -----------
+          1   2 seconds
+          2   4 seconds
+          3   8 seconds
+
+After exhausting retries, the job is moved to the Dead Letter Queue.
+
+## Logging
+
+Every execution creates a log file in:
 
     logs/
 
-### Metrics
+Example:
 
-The metrics command reports:
+    logs/
+    ├── job1_attempt0.log
+    ├── job1_attempt1.log
+    └── job2_attempt0.log
+
+## Metrics
+
+The `metrics` command reports:
 
 -   Total jobs
 -   Completed jobs
@@ -223,34 +280,117 @@ The metrics command reports:
 
 ------------------------------------------------------------------------
 
-## Assumptions & Trade-offs
+# Project Structure
 
--   Active workers are inferred from jobs currently in the PROCESSING
-    state.
--   DLQ retry resets the attempt counter, giving the job a fresh retry
-    budget.
--   Commands are executed using `cmd /c` on Windows and `sh -c` on
-    Unix-like systems.
+    src
+    ├── cli
+    ├── database
+    ├── executor
+    ├── model
+    ├── repository
+    ├── worker
+    └── Main.java
 
 ------------------------------------------------------------------------
 
-## Testing
+# Assumptions & Trade-offs
 
-The project has been manually tested for:
+-   Active workers shown by `status` are inferred from jobs currently in
+    the `PROCESSING` state.
+-   DLQ retry resets the attempt counter to zero, providing a fresh
+    retry budget.
+-   Commands execute using `cmd /c` on Windows and `sh -c` on Unix-like
+    systems.
 
--   Successful job execution
--   Failed job retries
--   Dead Letter Queue
--   Multi-worker processing
+------------------------------------------------------------------------
+
+# Testing
+
+The project was manually verified against all required scenarios.
+
+## 1. Basic Job Execution
+
+``` bash
+queuectl enqueue '{"command":"echo Hello"}'
+queuectl worker start
+```
+
+Expected:
+
+-   Job completes successfully.
+
+## 2. Retry & Dead Letter Queue
+
+``` bash
+queuectl enqueue '{"command":"invalidcommand"}'
+queuectl worker start
+```
+
+Expected:
+
+-   Automatic retries
+-   Exponential backoff
+-   Job moves to DLQ after maximum retries
+
+## 3. Multiple Workers
+
+``` bash
+queuectl worker start --count 3
+```
+
+Expected:
+
+-   Concurrent processing
+-   No duplicate execution
+
+## 4. Invalid Command Handling
+
+Expected:
+
+-   Failure handled gracefully
+-   Retry mechanism triggered
+-   Execution logs generated
+
+## 5. Persistence
+
+-   Enqueue jobs
+-   Stop QueueCTL
+-   Restart QueueCTL
+
+Expected:
+
+-   Jobs remain in SQLite
+-   Processing resumes correctly
+
+A sample `test.sh` is included for Unix-like systems. Development and
+verification were performed manually on Windows using the CLI commands
+above.
+
+------------------------------------------------------------------------
+
+# Bonus Features Implemented
+
+-   Job timeout handling
+-   Execution logging
+-   Queue metrics
 -   Crash recovery
+-   Runtime configuration
 -   Graceful shutdown
--   Configuration management
--   Metrics
--   Timeout handling
--   Persistent storage across restarts
-
-A sample `test.sh` script is also included for Unix-like systems.
+-   DLQ retry
 
 ------------------------------------------------------------------------
 
- 
+# Future Improvements
+
+-   Worker heartbeat monitoring
+-   Job priority queues
+-   Scheduled jobs (`run_at`)
+-   REST API
+-   Web dashboard
+
+------------------------------------------------------------------------
+
+# License
+
+This project was developed as part of a Backend Developer Internship
+Assignment.
