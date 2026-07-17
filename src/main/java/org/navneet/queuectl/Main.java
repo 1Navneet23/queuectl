@@ -29,18 +29,26 @@ public class Main {
 
             System.out.println("\nShutdown signal received.");
 
+            WorkerFlag.remove();
+
             manager.stop();
 
             System.out.println("Shutdown complete.");
 
         }));
-
+        WorkerFlag.create();
 
         manager.start();
 
-        // Keep Main alive
-        while (true) {
+        while (WorkerFlag.exists()) {
             Thread.sleep(1000);
         }
+
+        System.out.println("Stop signal detected.");
+
+        manager.stop();
+
+        WorkerFlag.remove();
+
     }
 }
