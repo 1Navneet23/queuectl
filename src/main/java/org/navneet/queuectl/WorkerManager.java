@@ -16,8 +16,14 @@ public class WorkerManager {
         executor = Executors.newFixedThreadPool(workerCount);
         workers = new ArrayList<>();
 
+        ConfigRepository configRepo = new ConfigRepository();
+
+        int backoffBase = Integer.parseInt(
+                configRepo.get("backoff-base", "2")
+        );
+
         for (int i = 1; i <= workerCount; i++) {
-            workers.add(new Worker("worker-" + i, repository));
+            workers.add(new Worker("worker-" + i, repository, backoffBase));
         }
     }
 

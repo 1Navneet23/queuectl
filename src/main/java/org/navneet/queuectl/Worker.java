@@ -9,19 +9,16 @@ public class Worker implements Runnable {
     // Poll database every second if no jobs are available
     private static final long POLL_INTERVAL_MS = 1000;
 
-    private final ConfigRepository configRepo = new ConfigRepository();
-
-    private final int backoffBase = Integer.parseInt(
-            configRepo.get("backoff-base", "2")
-    );
+    private final int backoffBase;
     private final String workerId;
     private final JobRepository repository;
 
     private volatile boolean running = true;
 
-    public Worker(String workerId, JobRepository repository) {
+    public Worker(String workerId, JobRepository repository,int backoffBase) {
         this.workerId = workerId;
         this.repository = repository;
+        this.backoffBase=backoffBase;
     }
 
     @Override
