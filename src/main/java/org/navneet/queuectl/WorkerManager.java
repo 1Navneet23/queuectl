@@ -16,14 +16,8 @@ public class WorkerManager {
         executor = Executors.newFixedThreadPool(workerCount);
         workers = new ArrayList<>();
 
-        ConfigRepository configRepo = new ConfigRepository();
-
-        int backoffBase = Integer.parseInt(
-                configRepo.get("backoff-base", "2")
-        );
-
         for (int i = 1; i <= workerCount; i++) {
-            workers.add(new Worker("worker-" + i, repository, backoffBase));
+            workers.add(new Worker("worker-" + i, repository));
         }
     }
 
@@ -48,15 +42,13 @@ public class WorkerManager {
             worker.stop();
         }
 
-
         executor.shutdown();
 
         try {
 
             if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
 
-                System.out.println("Workers did not finish in time.");
-
+                System.out.println("Workers did not finish in time. Forcing shutdown.");
                 executor.shutdownNow();
 
                 if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
@@ -67,7 +59,6 @@ public class WorkerManager {
         } catch (InterruptedException e) {
 
             executor.shutdownNow();
-
             Thread.currentThread().interrupt();
         }
 

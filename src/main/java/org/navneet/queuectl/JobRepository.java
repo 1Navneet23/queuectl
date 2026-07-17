@@ -53,7 +53,7 @@ public class JobRepository {
     }
 
     public List<Job> findAll() {
-        String sql = "SELECT * FROM jobs";
+        String sql = "SELECT * FROM jobs ORDER BY createdAt";
         List<Job> jobs = new ArrayList<>();
         try (Connection connection = Database.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);
@@ -67,7 +67,7 @@ public class JobRepository {
     }
 
     public List<Job> findByState(JobState state) {
-        String sql = "SELECT * FROM jobs WHERE state = ?";
+        String sql = "SELECT * FROM jobs WHERE state = ? ORDER BY createdAt";
         List<Job> jobs = new ArrayList<>();
         try (Connection connection = Database.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -109,9 +109,12 @@ public class JobRepository {
     }
 
     /**
-     * Atomically claims the next available pending job for the given worker,
-     * using UPDATE ... RETURNING so the claim and the read happen in one
-     * indivisible statement — no separate "find what I claimed" query needed.
+     * Atomically claims the next available job for a worker.
+     * Eligible jobs are either:
+     *   - PENDING  with next_run_at IS NULL or <= now
+     *   - FAILED   with next_run_at <= now  (ready for retry)
+     *
+     * Uses UPDATE...RETURNING so claim + read are one atomic statement.
      */
     public Optional<Job> claimNextJob(String workerId) {
         String sql = """
@@ -119,12 +122,13 @@ public class JobRepository {
                 SET state = ?, claimed_by = ?, updatedAt = ?
                 WHERE id = (
                     SELECT id FROM jobs
-                    WHERE state = ?
-                      AND (next_run_at IS NULL OR next_run_at <= ?)
+                    WHERE (
+                            (state = ? AND (next_run_at IS NULL OR next_run_at <= ?))
+                         OR (state = ? AND next_run_at <= ?)
+                    )
                     ORDER BY createdAt
                     LIMIT 1
                 )
-                AND state = ?
                 RETURNING *
                 """;
 
@@ -138,13 +142,42 @@ public class JobRepository {
             statement.setString(3, now);
             statement.setString(4, JobState.PENDING.name());
             statement.setString(5, now);
-            statement.setString(6, JobState.PENDING.name());
+            statement.setString(6, JobState.FAILED.name());
+            statement.setString(7, now);
 
             try (ResultSet rs = statement.executeQuery()) {
                 return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to claim job", e);
+        }
+    }
+
+    /**
+     * On worker startup, release any PROCESSING jobs previously claimed by this
+     * worker ID (left over from a crash). Resets them to PENDING so they can be
+     * retried.
+     */
+    public void releaseStaleJobs(String workerId) {
+        String sql = """
+                UPDATE jobs
+                SET state = ?, claimed_by = NULL, next_run_at = NULL, updatedAt = ?
+                WHERE state = ? AND claimed_by = ?
+                """;
+        try (Connection connection = Database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, JobState.PENDING.name());
+            statement.setString(2, Instant.now().toString());
+            statement.setString(3, JobState.PROCESSING.name());
+            statement.setString(4, workerId);
+
+            int released = statement.executeUpdate();
+            if (released > 0) {
+                System.out.println("Recovered " + released + " stale PROCESSING job(s) from previous run.");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to release stale jobs", e);
         }
     }
 

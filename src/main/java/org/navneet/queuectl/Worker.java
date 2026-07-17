@@ -1,24 +1,22 @@
 package org.navneet.queuectl;
 
-
 import java.time.Instant;
 import java.util.Optional;
 
 public class Worker implements Runnable {
 
-    // Poll database every second if no jobs are available
     private static final long POLL_INTERVAL_MS = 1000;
 
-    private final int backoffBase;
     private final String workerId;
     private final JobRepository repository;
+    private final ConfigRepository configRepository;
 
     private volatile boolean running = true;
 
-    public Worker(String workerId, JobRepository repository,int backoffBase) {
+    public Worker(String workerId, JobRepository repository) {
         this.workerId = workerId;
         this.repository = repository;
-        this.backoffBase=backoffBase;
+        this.configRepository = new ConfigRepository();
     }
 
     @Override
@@ -26,13 +24,15 @@ public class Worker implements Runnable {
 
         System.out.println("Worker started: " + workerId);
 
+        // Recover any jobs this worker left in PROCESSING from a previous crash
+        repository.releaseStaleJobs(workerId);
+
         while (running) {
 
             try {
 
                 Optional<Job> optionalJob = repository.claimNextJob(workerId);
 
-                // No job available
                 if (optionalJob.isEmpty()) {
                     Thread.sleep(POLL_INTERVAL_MS);
                     continue;
@@ -45,8 +45,7 @@ public class Worker implements Runnable {
                 System.out.println("Job    : " + job.getId());
                 System.out.println("Command: " + job.getCommand());
 
-                ExecutionResult result =
-                        CommandExecutor.executeCommand(job.getCommand());
+                ExecutionResult result = CommandExecutor.executeCommand(job.getCommand());
 
                 job.setUpdatedAt(Instant.now());
 
@@ -54,6 +53,7 @@ public class Worker implements Runnable {
 
                     job.setState(JobState.COMPLETED);
                     job.setNextRunAt(null);
+                    job.setClaimedBy(null);
                     System.out.println("Status : COMPLETED");
 
                 } else {
@@ -64,29 +64,27 @@ public class Worker implements Runnable {
 
                         job.setState(JobState.DEAD);
                         job.setNextRunAt(null);
+                        job.setClaimedBy(null);
                         System.out.println("Status : DEAD");
                         System.out.println("Reason : Maximum retries exceeded");
 
                     } else {
 
-                        job.setState(JobState.PENDING);
+                        // Read backoff-base fresh each time so config changes take effect
+                        int backoffBase = Integer.parseInt(
+                                configRepository.get("backoff-base", "2")
+                        );
 
-                        long delay =
-                                (long) Math.pow(backoffBase, job.getAttempts());
-                        Instant nextRun =
-                                Instant.now().plusSeconds(delay);
+                        long delay = (long) Math.pow(backoffBase, job.getAttempts());
+                        Instant nextRun = Instant.now().plusSeconds(delay);
 
+                        // Correct lifecycle: PROCESSING -> FAILED (retryable) with next_run_at set
+                        job.setState(JobState.FAILED);
                         job.setNextRunAt(nextRun);
-
-                        // Release ownership so another worker can claim later
                         job.setClaimedBy(null);
 
-                        System.out.println("Status : RETRY");
-                        System.out.println("Attempts: "
-                                + job.getAttempts()
-                                + "/"
-                                + job.getMaxRetries());
-
+                        System.out.println("Status  : FAILED (will retry)");
+                        System.out.println("Attempts: " + job.getAttempts() + "/" + job.getMaxRetries());
                         System.out.println("Next Run: " + nextRun);
                     }
                 }
@@ -95,7 +93,7 @@ public class Worker implements Runnable {
 
                 System.out.println("Exit Code : " + result.getExitCode());
 
-                if (!result.getOutput().isBlank()) {
+                if (result.getOutput() != null && !result.getOutput().isBlank()) {
                     System.out.println("Output:");
                     System.out.println(result.getOutput());
                 }
@@ -107,7 +105,7 @@ public class Worker implements Runnable {
 
             } catch (Exception e) {
 
-                System.err.println("Worker error:");
+                System.err.println("Worker error: " + e.getMessage());
                 e.printStackTrace();
             }
         }

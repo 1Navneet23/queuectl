@@ -6,14 +6,14 @@ import picocli.CommandLine.Parameters;
 
 @Command(
         name = "set",
-        description = "Set a configuration value, e.g. 'config set max-retries 3'"
+        description = "Set a configuration value, e.g. 'config set max-retries 3' or 'config set backoff-base 2'"
 )
 public class ConfigSetCommand implements Runnable {
 
-    @Parameters(index = "0", description = "Config key (e.g. max-retries, backoff-base)")
+    @Parameters(index = "0", description = "Config key: max-retries or backoff-base")
     private String key;
 
-    @Parameters(index = "1", description = "Config value")
+    @Parameters(index = "1", description = "Config value (positive integer)")
     private String value;
 
     private final ConfigRepository configRepository = new ConfigRepository();
@@ -24,11 +24,21 @@ public class ConfigSetCommand implements Runnable {
     @Override
     public void run() {
         if (!KNOWN_KEYS.contains(key)) {
-            System.out.println("Warning: \"" + key + "\" is not a recognized config key. Known keys: " + KNOWN_KEYS);
+            System.err.println("Error: \"" + key + "\" is not a recognised config key. Known keys: " + KNOWN_KEYS);
+            return;
         }
 
+        // max-retries must be a positive integer; backoff-base must be a positive integer >= 2
         try {
-            Integer.parseInt(value);
+            int intValue = Integer.parseInt(value);
+            if (intValue < 1) {
+                System.err.println("Error: value must be a positive integer, got \"" + value + "\".");
+                return;
+            }
+            if (key.equals("backoff-base") && intValue < 2) {
+                System.err.println("Error: backoff-base must be >= 2 (got \"" + value + "\").");
+                return;
+            }
         } catch (NumberFormatException e) {
             System.err.println("Error: value must be a whole number, got \"" + value + "\".");
             return;
