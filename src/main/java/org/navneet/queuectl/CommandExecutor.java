@@ -6,9 +6,16 @@ import java.io.InputStreamReader;
 
 public class CommandExecutor {
 
+    private static boolean isWindows() {
+        String os = System.getProperty("os.name");
+        return os != null && os.toLowerCase().contains("win");
+    }
+
     public static ExecutionResult executeCommand(String command) {
 
-        ProcessBuilder builder = new ProcessBuilder("cmd", "/c", command);
+        ProcessBuilder builder = isWindows()
+                ? new ProcessBuilder("cmd", "/c", command)
+                : new ProcessBuilder("sh", "-c", command);
 
         // Merge stdout and stderr
         builder.redirectErrorStream(true);

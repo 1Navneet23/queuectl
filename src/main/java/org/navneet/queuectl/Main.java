@@ -1,54 +1,25 @@
 package org.navneet.queuectl;
 
-public class Main {
+import org.navneet.queuectl.cli.*;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
 
-    public static void main(String[] args) throws Exception {
-
+@Command(name = "queuectl", subcommands = {
+        EnqueueCommand.class,
+        WorkerCommand.class,
+        StatusCommand.class,
+        ListCommand.class,
+        DlqCommand.class,
+        ConfigCommand.class
+})
+public class Main implements Runnable {
+    public static void main(String[] args) {
         Database.createTable();
-        JobRepository repository = new JobRepository();
-
-        ConfigRepository configRepo = new ConfigRepository();
-
-        int maxRetries = Integer.parseInt(
-                configRepo.get("max-retries", "5")
-        );
-        repository.insert(new Job("echo Job 1", maxRetries));
-        repository.insert(new Job("echo Job 2", maxRetries));
-        repository.insert(new Job("echo Job 3", maxRetries));
-        repository.insert(new Job("echo Job 4", maxRetries));
-        repository.insert(new Job("echo Job 5", maxRetries));
-
-        repository.insert(new Job("ping 127.0.0.1 -n 20 > nul", maxRetries));
-        repository.insert(new Job("asdfasdf", maxRetries));
-        WorkerManager manager =
-                new WorkerManager(3, repository);
-
-
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-
-            System.out.println("\nShutdown signal received.");
-
-            WorkerFlag.remove();
-
-            manager.stop();
-
-            System.out.println("Shutdown complete.");
-
-        }));
-        WorkerFlag.create();
-
-        manager.start();
-
-        while (WorkerFlag.exists()) {
-            Thread.sleep(1000);
-        }
-
-        System.out.println("Stop signal detected.");
-
-        manager.stop();
-
-        WorkerFlag.remove();
-
+        int exitCode = new CommandLine(new Main()).execute(args);
+        System.exit(exitCode);
+    }
+    @Override
+    public void run() {
+        System.out.println("Use --help to see available commands.");
     }
 }
