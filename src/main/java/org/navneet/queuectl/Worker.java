@@ -5,7 +5,7 @@ import java.util.Optional;
 
 public class Worker implements Runnable {
 
-    private static final long POLL_INTERVAL_MS = 1000;
+    private static final long POLL_INTERVAL_MS = 500;
 
     private final String workerId;
     private final JobRepository repository;
@@ -45,9 +45,18 @@ public class Worker implements Runnable {
                 System.out.println("Job    : " + job.getId());
                 System.out.println("Command: " + job.getCommand());
 
-                ExecutionResult result = CommandExecutor.executeCommand(job.getCommand());
+
+                ExecutionResult result = CommandExecutor.executeCommand(
+                        job.getCommand(),
+                        job.getId(),
+                        job.getAttempts(),
+                        Integer.parseInt(configRepository.get("job-timeout", "0")) // 0 = no timeout
+                );
 
                 job.setUpdatedAt(Instant.now());
+                job.setLogPath(result.getLogPath());
+                job.setTimedOut(result.isTimedOut());
+                job.setDurationMs(result.getDurationMs());
 
                 if (result.isSuccess()) {
 
@@ -66,24 +75,19 @@ public class Worker implements Runnable {
                         job.setNextRunAt(null);
                         job.setClaimedBy(null);
                         System.out.println("Status : DEAD");
-                        System.out.println("Reason : Maximum retries exceeded");
+                        System.out.println("Reason : " + (result.isTimedOut() ? "Timed out, max retries exceeded" : "Maximum retries exceeded"));
 
                     } else {
 
-                        // Read backoff-base fresh each time so config changes take effect
-                        int backoffBase = Integer.parseInt(
-                                configRepository.get("backoff-base", "2")
-                        );
-
+                        int backoffBase = Integer.parseInt(configRepository.get("backoff-base", "2"));
                         long delay = (long) Math.pow(backoffBase, job.getAttempts());
                         Instant nextRun = Instant.now().plusSeconds(delay);
 
-                        // Correct lifecycle: PROCESSING -> FAILED (retryable) with next_run_at set
                         job.setState(JobState.FAILED);
                         job.setNextRunAt(nextRun);
                         job.setClaimedBy(null);
 
-                        System.out.println("Status  : FAILED (will retry)");
+                        System.out.println("Status  : " + (result.isTimedOut() ? "TIMED OUT (will retry)" : "FAILED (will retry)"));
                         System.out.println("Attempts: " + job.getAttempts() + "/" + job.getMaxRetries());
                         System.out.println("Next Run: " + nextRun);
                     }
@@ -92,10 +96,9 @@ public class Worker implements Runnable {
                 repository.update(job);
 
                 System.out.println("Exit Code : " + result.getExitCode());
-
-                if (result.getOutput() != null && !result.getOutput().isBlank()) {
-                    System.out.println("Output:");
-                    System.out.println(result.getOutput());
+                System.out.println("Duration  : " + result.getDurationMs() + "ms");
+                if (result.getLogPath() != null) {
+                    System.out.println("Log       : " + result.getLogPath());
                 }
 
             } catch (InterruptedException e) {

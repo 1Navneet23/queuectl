@@ -15,7 +15,8 @@ import picocli.CommandLine.Command;
                 StatusCommand.class,
                 ListCommand.class,
                 DlqCommand.class,
-                ConfigCommand.class
+                ConfigCommand.class,
+                MetricsCommand.class
         }
 )
 public class Main implements Runnable {

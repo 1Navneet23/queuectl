@@ -11,13 +11,13 @@ import java.util.List;
 import java.util.Optional;
 
 public class JobRepository {
-
     public void insert(Job job) {
         String sql = """
                 INSERT INTO jobs
                 (id, command, state, attempts, maxRetries,
-                 createdAt, updatedAt, next_run_at, claimed_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 createdAt, updatedAt, next_run_at, claimed_by,
+                 log_path, timed_out, duration_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = Database.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -31,12 +31,54 @@ public class JobRepository {
             statement.setString(7, job.getUpdatedAt().toString());
             setNullableString(statement, 8, job.getNextRunAt() != null ? job.getNextRunAt().toString() : null);
             setNullableString(statement, 9, job.getClaimedBy());
+            setNullableString(statement, 10, job.getLogPath());
+            statement.setInt(11, job.isTimedOut() ? 1 : 0);
+            if (job.getDurationMs() != null) {
+                statement.setLong(12, job.getDurationMs());
+            } else {
+                statement.setNull(12, Types.BIGINT);
+            }
 
             statement.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to insert job", e);
         }
     }
+
+    public void update(Job job) {
+        String sql = """
+                UPDATE jobs
+                SET command = ?, state = ?, attempts = ?, maxRetries = ?,
+                    createdAt = ?, updatedAt = ?, next_run_at = ?, claimed_by = ?,
+                    log_path = ?, timed_out = ?, duration_ms = ?
+                WHERE id = ?
+                """;
+        try (Connection connection = Database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, job.getCommand());
+            statement.setString(2, job.getState().name());
+            statement.setInt(3, job.getAttempts());
+            statement.setInt(4, job.getMaxRetries());
+            statement.setString(5, job.getCreatedAt().toString());
+            statement.setString(6, job.getUpdatedAt().toString());
+            setNullableString(statement, 7, job.getNextRunAt() != null ? job.getNextRunAt().toString() : null);
+            setNullableString(statement, 8, job.getClaimedBy());
+            setNullableString(statement, 9, job.getLogPath());
+            statement.setInt(10, job.isTimedOut() ? 1 : 0);
+            if (job.getDurationMs() != null) {
+                statement.setLong(11, job.getDurationMs());
+            } else {
+                statement.setNull(11, Types.BIGINT);
+            }
+            statement.setString(12, job.getId());
+
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update job", e);
+        }
+    }
+
 
     public Optional<Job> findById(String id) {
         String sql = "SELECT * FROM jobs WHERE id = ?";
@@ -82,40 +124,7 @@ public class JobRepository {
         }
     }
 
-    public void update(Job job) {
-        String sql = """
-                UPDATE jobs
-                SET command = ?, state = ?, attempts = ?, maxRetries = ?,
-                    createdAt = ?, updatedAt = ?, next_run_at = ?, claimed_by = ?
-                WHERE id = ?
-                """;
-        try (Connection connection = Database.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-            statement.setString(1, job.getCommand());
-            statement.setString(2, job.getState().name());
-            statement.setInt(3, job.getAttempts());
-            statement.setInt(4, job.getMaxRetries());
-            statement.setString(5, job.getCreatedAt().toString());
-            statement.setString(6, job.getUpdatedAt().toString());
-            setNullableString(statement, 7, job.getNextRunAt() != null ? job.getNextRunAt().toString() : null);
-            setNullableString(statement, 8, job.getClaimedBy());
-            statement.setString(9, job.getId());
-
-            statement.executeUpdate();
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to update job", e);
-        }
-    }
-
-    /**
-     * Atomically claims the next available job for a worker.
-     * Eligible jobs are either:
-     *   - PENDING  with next_run_at IS NULL or <= now
-     *   - FAILED   with next_run_at <= now  (ready for retry)
-     *
-     * Uses UPDATE...RETURNING so claim + read are one atomic statement.
-     */
     public Optional<Job> claimNextJob(String workerId) {
         String sql = """
                 UPDATE jobs
@@ -203,6 +212,10 @@ public class JobRepository {
         if (nextRun != null) job.setNextRunAt(Instant.parse(nextRun));
 
         job.setClaimedBy(rs.getString("claimed_by"));
+        job.setLogPath(rs.getString("log_path"));
+        job.setTimedOut(rs.getInt("timed_out") == 1);
+        long duration = rs.getLong("duration_ms");
+        job.setDurationMs(rs.wasNull() ? null : duration);
         return job;
     }
 }

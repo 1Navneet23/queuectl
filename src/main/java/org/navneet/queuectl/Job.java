@@ -14,7 +14,18 @@ public class Job {
     private Instant updatedAt;
     private Instant nextRunAt;
     private String claimedBy;
+    private String logPath;
+    private boolean timedOut;
+    private Long durationMs;
 
+    public String getLogPath() { return logPath; }
+    public void setLogPath(String logPath) { this.logPath = logPath; }
+
+    public boolean isTimedOut() { return timedOut; }
+    public void setTimedOut(boolean timedOut) { this.timedOut = timedOut; }
+
+    public Long getDurationMs() { return durationMs; }
+    public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
     public Job() {
         // used when reconstructing a Job from the database
     }

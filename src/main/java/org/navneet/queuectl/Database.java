@@ -12,10 +12,8 @@ public class Database {
     public static Connection getConnection() throws SQLException {
         Connection connection = DriverManager.getConnection(URL);
         try (Statement st = connection.createStatement()) {
-            // WAL must be set before busy_timeout for correct effect order
             st.execute("PRAGMA journal_mode=WAL;");
             st.execute("PRAGMA busy_timeout=5000;");
-            // Reduce fsync overhead while maintaining crash safety in WAL mode
             st.execute("PRAGMA synchronous=NORMAL;");
         }
         return connection;
@@ -44,7 +42,6 @@ public class Database {
                 );
                 """;
 
-        // Index to speed up claimNextJob — queries filter on state + next_run_at
         String jobsIndex = """
                 CREATE INDEX IF NOT EXISTS idx_jobs_state_next_run
                 ON jobs (state, next_run_at);
@@ -57,9 +54,30 @@ public class Database {
             statement.execute(configTable);
             statement.execute(jobsIndex);
 
+            // Migrations: add columns needed for logging/timeout bonus features.
+            // SQLite has no "ADD COLUMN IF NOT EXISTS", so we check pragma first.
+            addColumnIfMissing(connection, "jobs", "log_path", "TEXT");
+            addColumnIfMissing(connection, "jobs", "timed_out", "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(connection, "jobs", "duration_ms", "INTEGER");
+
         } catch (SQLException e) {
             System.err.println("Database initialisation error: " + e.getMessage());
             throw new RuntimeException("Failed to initialise database", e);
+        }
+    }
+
+    private static void addColumnIfMissing(Connection connection, String table,
+                                           String column, String type) throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            var rs = st.executeQuery("PRAGMA table_info(" + table + ")");
+            while (rs.next()) {
+                if (rs.getString("name").equalsIgnoreCase(column)) {
+                    return; // already exists
+                }
+            }
+        }
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type + ";");
         }
     }
 }

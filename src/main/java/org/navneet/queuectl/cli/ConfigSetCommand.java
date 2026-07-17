@@ -19,7 +19,7 @@ public class ConfigSetCommand implements Runnable {
     private final ConfigRepository configRepository = new ConfigRepository();
 
     private static final java.util.Set<String> KNOWN_KEYS =
-            java.util.Set.of("max-retries", "backoff-base");
+            java.util.Set.of("max-retries", "backoff-base","job-timeout");
 
     @Override
     public void run() {
@@ -37,6 +37,10 @@ public class ConfigSetCommand implements Runnable {
             }
             if (key.equals("backoff-base") && intValue < 2) {
                 System.err.println("Error: backoff-base must be >= 2 (got \"" + value + "\").");
+                return;
+            }
+            if (key.equals("job-timeout") && intValue < 0) {
+                System.err.println("Error: job-timeout must be >= 0.");
                 return;
             }
         } catch (NumberFormatException e) {
