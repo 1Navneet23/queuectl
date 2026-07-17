@@ -1,5 +1,6 @@
 package org.navneet.queuectl.cli;
 
+import org.navneet.queuectl.WorkerFlag;
 import picocli.CommandLine.Command;
 
 @Command(
@@ -10,6 +11,11 @@ public class WorkerStopCommand implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("worker stop placeholder - not implemented yet");
+        if (WorkerFlag.exists()) {
+            System.out.println("Stop signal already pending.");
+            return;
+        }
+        WorkerFlag.create();
+        System.out.println("Stop signal sent. Running workers will finish their current job and exit.");
     }
 }
