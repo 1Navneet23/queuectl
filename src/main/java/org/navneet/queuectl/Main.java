@@ -4,14 +4,20 @@ import org.navneet.queuectl.cli.*;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
-@Command(name = "queuectl", subcommands = {
-        EnqueueCommand.class,
-        WorkerCommand.class,
-        StatusCommand.class,
-        ListCommand.class,
-        DlqCommand.class,
-        ConfigCommand.class
-})
+@Command(
+        name = "queuectl",
+        mixinStandardHelpOptions = true,
+        version = "1.0",
+        description = "SQLite-backed job queue",
+        subcommands = {
+                EnqueueCommand.class,
+                WorkerCommand.class,
+                StatusCommand.class,
+                ListCommand.class,
+                DlqCommand.class,
+                ConfigCommand.class
+        }
+)
 public class Main implements Runnable {
     public static void main(String[] args) {
         Database.createTable();
@@ -20,6 +26,6 @@ public class Main implements Runnable {
     }
     @Override
     public void run() {
-        System.out.println("Use --help to see available commands.");
+        CommandLine.usage(this, System.out);
     }
 }
