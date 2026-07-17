@@ -10,7 +10,14 @@ public class Database {
     private static final String url = "jdbc:sqlite:queuectl.db";
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url);
+        Connection connection = DriverManager.getConnection(url);
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA journal_mode=WAL;");
+            statement.execute("PRAGMA busy_timeout=5000;");
+        }
+
+        return connection;
     }
 
     public static void createTable() {
@@ -40,10 +47,7 @@ public class Database {
                 Connection connection = getConnection();
                 Statement statement = connection.createStatement()
         ) {
-            // Create jobs table
             statement.execute(jobsTable);
-
-            // Create config table
             statement.execute(configTable);
 
         } catch (SQLException e) {
