@@ -12,10 +12,9 @@ exponential backoff, crash recovery, and a Dead Letter Queue (DLQ).
 
 ------------------------------------------------------------------------
 
-## Demo Video
+## 🎥 Demo Video
 
-> **Demo:** *Add your Google Drive / YouTube demo link here before
-> submission.*
+[▶ Watch the QueueCTL Demo Video](https://drive.google.com/file/d/19NhIzGZ8lFjdo6yr54EImlKPwOsRxzWG/view?usp=sharing)
 
 ------------------------------------------------------------------------
 

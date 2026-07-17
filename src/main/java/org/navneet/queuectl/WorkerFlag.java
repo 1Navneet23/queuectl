@@ -30,3 +30,6 @@ public class WorkerFlag {
         return Files.exists(FLAG_PATH);
     }
 }
+
+//q enqueue "{\"id\":\"job-success\",\"command\":\"echo Hello QueueCTL\"}"
+//q enqueue "{\"id\":\"job-fail\",\"command\":\"invalidcommand\"}"
